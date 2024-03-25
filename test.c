@@ -4,7 +4,8 @@ struct vec {
 };
 
 {
-  vec test = { 5, 4 };
+  int x = 10;
+  int y = x;
+  vec test = { x, y };
 }
 
-int x = 10;
