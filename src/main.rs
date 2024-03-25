@@ -149,16 +149,8 @@ fn build(filename: String, output: Option<String>) -> Result<String, String> {
             process::Command::new("nasm")
                 .arg("-felf64")
                 .arg(format!("{}.asm", outputfile))
-                .spawn()
+                .status()
                 .expect("Failed to compile");
-
-            println!(
-                "{:?}",
-                process::Command::new("ld")
-                    .arg(format!("{}.o", outputfile))
-                    .arg("-o")
-                    .arg(&outputfile)
-            );
 
             process::Command::new("ld")
                 .arg(format!("{}.o", outputfile))
