@@ -3,4 +3,8 @@ struct vec {
   int y;
 };
 
-vec test = { 10, 5 };
+{
+  vec test = { 5, 4 };
+}
+
+int x = 10;

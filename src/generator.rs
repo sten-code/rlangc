@@ -28,7 +28,7 @@ pub struct VariableData {
 
 pub struct Environment<'a> {
     pub parent: Option<&'a Environment<'a>>,
-    pub top_stack: usize,
+    pub base_stack: usize,
     pub variables: HashMap<String, VariableData>,
     pub datatypes: HashMap<String, Datatype>,
 }
@@ -123,9 +123,8 @@ _start:
 
                 code = format!(
                     "{}
-    push rax
+    mov rdi, rax
     mov rax, 60
-    pop rdi
     syscall
     pop rbp
     ret",
@@ -144,7 +143,7 @@ _start:
                     parent: Some(env),
                     variables: HashMap::new(),
                     datatypes: HashMap::new(),
-                    top_stack: env.top_stack + size,
+                    base_stack: env.base_stack + size,
                 };
 
                 let mut code = String::from("");
@@ -179,13 +178,18 @@ _start:
                     return Err(GeneratorError::VariableAlreadyExists);
                 }
 
+                let mut size = 0;
+                for var in &env.variables {
+                    size += var.1.datatype.size();
+                }
+
                 let datatype = env.lookup_datatype(&datatype)?;
 
                 env.declare_var(
                     &name,
                     VariableData {
                         datatype: datatype.clone(),
-                        location: env.top_stack + datatype.size(),
+                        location: env.base_stack + size + datatype.size(),
                     },
                 )?;
 

@@ -93,7 +93,7 @@ fn build(filename: String, output: Option<String>) -> Result<String, String> {
     println!("{}", ast);
     let mut env = generator::Environment {
         parent: None,
-        top_stack: 0,
+        base_stack: 0,
         variables: HashMap::new(),
         datatypes: HashMap::from([(String::from("int"), generator::Datatype::Single { size: 4 })]),
     };
@@ -103,9 +103,8 @@ fn build(filename: String, output: Option<String>) -> Result<String, String> {
             println!("Variables:");
             for var in env.variables {
                 println!(
-                    "{}: {}, size: {}, location: {}",
+                    "{}, size: {}, location: {}",
                     var.0,
-                    "",
                     match var.1.datatype {
                         generator::Datatype::Single { size } => size.to_string(),
                         generator::Datatype::Struct { size, offsets } => format!(
@@ -122,6 +121,26 @@ fn build(filename: String, output: Option<String>) -> Result<String, String> {
                 );
             }
 
+            println!("\nDatatypes:");
+            for data in env.datatypes {
+                println!(
+                    "{}, size: {}",
+                    data.0,
+                    match data.1 {
+                        generator::Datatype::Single { size } => size.to_string(),
+                        generator::Datatype::Struct { size, offsets } => format!(
+                            "{}, offsets: {}",
+                            size,
+                            offsets
+                                .iter()
+                                .map(|(s, n)| format!("{}: {}", s, n))
+                                .collect::<Vec<String>>()
+                                .join(", ")
+                        ),
+                    }
+                );
+            }
+
             let mut file =
                 fs::File::create(format!("{}.asm", outputfile)).expect("Unable to create file");
             file.write_all(code.as_bytes())
@@ -132,6 +151,14 @@ fn build(filename: String, output: Option<String>) -> Result<String, String> {
                 .arg(format!("{}.asm", outputfile))
                 .spawn()
                 .expect("Failed to compile");
+
+            println!(
+                "{:?}",
+                process::Command::new("ld")
+                    .arg(format!("{}.o", outputfile))
+                    .arg("-o")
+                    .arg(&outputfile)
+            );
 
             process::Command::new("ld")
                 .arg(format!("{}.o", outputfile))

@@ -61,14 +61,19 @@ impl fmt::Display for Node {
         match self {
             Node::Program { body } => {
                 for expr in body {
-                    write!(f, "{};\n", expr)?;
+                    write!(f, "{}", expr)?;
+                    match expr {
+                        Node::Scope { body: _ } => {}
+                        _ => write!(f, ";")?,
+                    }
+                    write!(f, "\n")?;
                 }
                 Ok(())
             }
             Node::Scope { body } => {
-                write!(f, "{{")?;
+                write!(f, "{{\n")?;
                 for expr in body {
-                    write!(f, "{};\n", expr)?;
+                    write!(f, "    {};\n", expr)?;
                 }
                 write!(f, "}}")
             }
@@ -98,10 +103,15 @@ impl fmt::Display for Node {
             Node::Identifier { value } => write!(f, "{}", value),
             Node::StructData { data } => {
                 write!(f, "{{ ")?;
-                for element in data {
-                    write!(f, "{}, ", element)?;
+                for i in 0..data.len() {
+                    write!(
+                        f,
+                        "{}{}",
+                        data[i],
+                        if i < data.len() - 1 { ", " } else { "" }
+                    )?;
                 }
-                write!(f, "}}")
+                write!(f, " }}")
             }
         }
     }

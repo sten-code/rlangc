@@ -38,7 +38,7 @@ pub fn parse(mut tokens: Vec<lexer::Token>) -> Result<ast::Node, ParseError> {
 fn parse_stmt(tokens: &mut Vec<lexer::Token>) -> Result<ast::Node, ParseError> {
     let ast: ast::Node = match tokens.last().unwrap().token_type {
         lexer::TokenType::Identifier => parse_var_decl(tokens)?,
-        lexer::TokenType::OpenBrace => parse_scope(tokens)?,
+        lexer::TokenType::OpenBrace => return parse_scope(tokens),
         lexer::TokenType::TypeDef => parse_typedef(tokens)?,
         lexer::TokenType::Struct => parse_type(tokens)?,
         _ => parse_expr(tokens)?,
