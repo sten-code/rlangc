@@ -35,62 +35,48 @@ enum Commands {
     },
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     match args.command {
-        Commands::Run { filename, output } => match build(filename, output) {
-            Ok(outputfile) => {
-                process::Command::new(outputfile)
-                    .spawn()
-                    .expect("Failed to run output");
-            }
-            Err(err) => {
-                println!("{}", err);
-                return;
-            }
-        },
+        Commands::Run { filename, output } => {
+            let outputfile = build(filename, output)?;
+            process::Command::new(outputfile)
+                .spawn()
+                .expect("Failed to run output");
+        }
         Commands::Build { filename, output } => {
-            if let Err(err) = build(filename, output) {
-                println!("{}", err);
-                return;
-            }
+            build(filename, output)?;
         }
     }
+
+    Ok(())
 }
 
 fn build(filename: String, output: Option<String>) -> Result<String, String> {
-    let mut outputfile: String = if output.is_none() {
-        let path = std::path::Path::new(&filename);
-        if let Some(stem) = path.file_stem() {
-            String::from(stem.to_str().unwrap_or_default())
-        } else {
-            return Err(format!("Couldn't get file stem from {}", filename));
+    let mut outputfile = match output {
+        Some(_) => output.unwrap(),
+        None => {
+            let path = std::path::Path::new(&filename);
+            match path.file_stem() {
+                Some(stem) => stem.to_str().unwrap_or_default().to_owned(),
+                None => return Err(format!("Couldn't get file stem from {}", filename)),
+            }
         }
-    } else {
-        output.clone().unwrap()
     };
 
     if outputfile == filename {
         outputfile = format!("_{}", outputfile);
     }
 
-    let data = match fs::read_to_string(&filename) {
-        Ok(data) => data,
-        Err(err) => {
-            return Err(err.to_string());
-        }
-    };
-
-    let tokens = lexer::lex(data).unwrap();
+    let data = fs::read_to_string(&filename).map_err(|err| err.to_string())?;
+    let tokens = lexer::lex(data).map_err(|err| format!("{err:?}"))?;
     for token in &tokens {
         println!("{}", token)
     }
 
-    let ast = match parser::parse(tokens) {
-        Ok(ast) => ast,
-        Err(err) => return Err(format!("{:?}", err)),
-    };
+    let ast = parser::parse(tokens).map_err(|err| format!("{err:?}"))?;
     println!("{}", ast);
+
     let mut env = generator::Environment {
         parent: None,
         base_stack: 0,
@@ -98,69 +84,26 @@ fn build(filename: String, output: Option<String>) -> Result<String, String> {
         datatypes: HashMap::from([(String::from("int"), generator::Datatype::Single { size: 4 })]),
     };
 
-    match ast.generate(&mut env) {
-        Ok(code) => {
-            println!("Variables:");
-            for var in env.variables {
-                println!(
-                    "{}, size: {}, location: {}",
-                    var.0,
-                    match var.1.datatype {
-                        generator::Datatype::Single { size } => size.to_string(),
-                        generator::Datatype::Struct { size, offsets } => format!(
-                            "{}, offsets: {}",
-                            size,
-                            offsets
-                                .iter()
-                                .map(|(s, n)| format!("{}: {}", s, n))
-                                .collect::<Vec<String>>()
-                                .join(", ")
-                        ),
-                    },
-                    var.1.location
-                );
-            }
+    let code = ast.generate(&mut env).map_err(|err| format!("{err:?}"))?;
+    println!("Variables: {:#?}", env.variables);
+    println!("Datatypes: {:#?}", env.datatypes);
 
-            println!("\nDatatypes:");
-            for data in env.datatypes {
-                println!(
-                    "{}, size: {}",
-                    data.0,
-                    match data.1 {
-                        generator::Datatype::Single { size } => size.to_string(),
-                        generator::Datatype::Struct { size, offsets } => format!(
-                            "{}, offsets: {}",
-                            size,
-                            offsets
-                                .iter()
-                                .map(|(s, n)| format!("{}: {}", s, n))
-                                .collect::<Vec<String>>()
-                                .join(", ")
-                        ),
-                    }
-                );
-            }
+    let asm_output = format!("{outputfile}.asm");
+    let ld_output = format!("{outputfile}.o");
 
-            let mut file =
-                fs::File::create(format!("{}.asm", outputfile)).expect("Unable to create file");
-            file.write_all(code.as_bytes())
-                .expect("Unable to write to file");
+    let mut file = fs::File::create(&asm_output).expect("Unable to create file");
+    file.write_all(code.as_bytes())
+        .expect("Unable to write to file");
 
-            process::Command::new("nasm")
-                .arg("-felf64")
-                .arg(format!("{}.asm", outputfile))
-                .status()
-                .expect("Failed to compile");
+    process::Command::new("nasm")
+        .args(["-felf64", &asm_output])
+        .status()
+        .expect("Failed to compile");
 
-            process::Command::new("ld")
-                .arg(format!("{}.o", outputfile))
-                .arg("-o")
-                .arg(&outputfile)
-                .spawn()
-                .expect("Failed to link");
+    process::Command::new("ld")
+        .args([&ld_output, "-o", &outputfile])
+        .spawn()
+        .expect("Failed to link");
 
-            Ok(outputfile)
-        }
-        Err(err) => Err(format!("{:?}", err)),
-    }
+    Ok(outputfile)
 }

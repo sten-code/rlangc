@@ -1,7 +1,7 @@
 use crate::ast;
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Datatype {
     Single {
         size: usize,
@@ -21,6 +21,7 @@ impl Datatype {
     }
 }
 
+#[derive(Debug)]
 pub struct VariableData {
     pub datatype: Datatype,
     pub location: usize,
