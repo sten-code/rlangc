@@ -1,7 +1,7 @@
 use crate::ast;
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Datatype {
     Single {
         size: usize,
@@ -21,6 +21,7 @@ impl Datatype {
     }
 }
 
+#[derive(Debug)]
 pub struct VariableData {
     pub datatype: Datatype,
     pub location: usize,
@@ -108,27 +109,24 @@ impl ast::Node {
     pub fn generate(&self, env: &mut Environment) -> Result<String, GeneratorError> {
         match self {
             ast::Node::Program { body } => {
-                let mut code = format!(
-                    "section .text
+                let mut code = "section .text
     global _start
 _start:
     push rbp
     mov rbp, rsp
-    "
-                );
+    ".to_owned();
 
                 for expr in body {
                     code += &expr.generate(env)?;
                 }
 
                 code = format!(
-                    "{}
+                    "{code}
     mov rdi, rax
     mov rax, 60
     syscall
     pop rbp
-    ret",
-                    code
+    ret"
                 );
 
                 Ok(code)
@@ -146,7 +144,7 @@ _start:
                     base_stack: env.base_stack + size,
                 };
 
-                let mut code = String::from("");
+                let mut code = String::new();
                 for expr in body {
                     code += &expr.generate(&mut new_env)?;
                 }
@@ -174,7 +172,7 @@ _start:
                 value,
             } => {
                 // Return an error if the variable already exists
-                if let Ok(_) = env.resolve_var(&name) {
+                if env.resolve_var(name).is_ok() {
                     return Err(GeneratorError::VariableAlreadyExists);
                 }
 
@@ -183,10 +181,10 @@ _start:
                     size += var.1.datatype.size();
                 }
 
-                let datatype = env.lookup_datatype(&datatype)?;
+                let datatype = env.lookup_datatype(datatype)?;
 
                 env.declare_var(
-                    &name,
+                    name,
                     VariableData {
                         datatype: datatype.clone(),
                         location: env.base_stack + size + datatype.size(),
@@ -194,7 +192,7 @@ _start:
                 )?;
 
                 let location = env.variables.get(name).unwrap().location;
-                let mut code = String::from("");
+                let mut code = String::new();
                 match *value.clone() {
                     ast::Node::StructData { data } => match datatype {
                         Datatype::Single { size: _ } => {
@@ -228,7 +226,7 @@ _start:
                 Ok(code)
             }
             ast::Node::StructDecl { name, properties } => {
-                if let Ok(_) = env.lookup_datatype(&name) {
+                if env.lookup_datatype(name).is_ok() {
                     return Err(GeneratorError::DatatypeAlreadyExists);
                 }
 
@@ -242,18 +240,18 @@ _start:
                 }
 
                 env.declare_datatype(
-                    &name,
+                    name,
                     Datatype::Struct {
-                        size: size(env, &properties)?,
+                        size: size(env, properties)?,
                         offsets,
                     },
                 )?;
 
-                Ok(String::from(""))
+                Ok(String::new())
             }
-            ast::Node::StructType { properties: _ } => Ok(String::from("")),
+            ast::Node::StructType { properties: _ } => Ok(String::new()),
             ast::Node::TypeDef { name, value } => {
-                if let Ok(_) = env.lookup_datatype(name) {
+                if env.lookup_datatype(name).is_ok() {
                     return Err(GeneratorError::DatatypeAlreadyExists);
                 }
 
@@ -280,13 +278,13 @@ _start:
                     },
                 )?;
 
-                Ok(String::from(""))
+                Ok(String::new())
             }
             ast::Node::Identifier { value } => {
                 let var_data = env.lookup_var(value)?;
                 Ok(format!("mov rax, [rbp-{}]", var_data.location))
             }
-            ast::Node::StructData { data: _ } => Ok(String::from("")),
+            ast::Node::StructData { data: _ } => Ok(String::new()),
         }
     }
 }
